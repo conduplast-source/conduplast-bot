@@ -1,6 +1,5 @@
 const express = require('express');
 const twilio = require('twilio');
-const Anthropic = require('@anthropic-ai/sdk');
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -10,8 +9,6 @@ const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const conversaciones = {};
 
@@ -60,18 +57,29 @@ async function obtenerRespuestaIA(numeroCliente, mensajeCliente) {
   }
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: conversaciones[numeroCliente]
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...conversaciones[numeroCliente]
+        ],
+        max_tokens: 1024,
+        temperature: 0.7
+      })
     });
 
-    const respuesta = response.content[0].text;
+    const data = await response.json();
+    const respuesta = data.choices[0].message.content;
     conversaciones[numeroCliente].push({ role: 'assistant', content: respuesta });
     return respuesta;
   } catch (error) {
-    console.error('Error con Claude API:', error);
+    console.error('Error con Groq API:', error);
     return 'Disculpá, tuve un problema técnico. Por favor escribinos de nuevo en unos minutos.';
   }
 }
